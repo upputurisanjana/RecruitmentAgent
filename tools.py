@@ -36,35 +36,95 @@ from guardrails import sanitize_resume_text, check_injection
 def _get_openai_client():
     """
     Return an OpenAI-compatible client.
-    Auto-detects OpenRouter keys (sk-or-*) and sets the correct base URL.
-    Override base URL explicitly with the OPENAI_BASE_URL env var if needed.
+    Priority order for credentials:
+      1. GITHUB_TOKEN  → GitHub Models endpoint (https://models.inference.ai.azure.com)
+      2. OPENROUTER_API_KEY / sk-or-* key → OpenRouter endpoint
+      3. OPENAI_API_KEY → standard OpenAI endpoint
+    Override base URL explicitly with OPENAI_BASE_URL env var if needed.
     """
     try:
         from openai import OpenAI  # type: ignore
-        api_key = os.environ.get("OPENAI_API_KEY", "")
+        api_key = _get_api_key()
         if not api_key:
-            raise EnvironmentError("OPENAI_API_KEY environment variable is not set.")
+            raise EnvironmentError(
+                "Set GITHUB_TOKEN (GitHub Models), OPENROUTER_API_KEY, or OPENAI_API_KEY."
+            )
 
         base_url = os.environ.get("OPENAI_BASE_URL", "")
-        if not base_url and api_key.startswith("sk-or-"):
-            base_url = "https://openrouter.ai/api/v1"
+
+        # Auto-set base URL when none is provided
+        if not base_url:
+            if _is_github_token(api_key):
+                base_url = "https://models.inference.ai.azure.com"
+            elif _is_openrouter_key(api_key):
+                base_url = "https://openrouter.ai/api/v1"
 
         return OpenAI(api_key=api_key, base_url=base_url or None)
     except ImportError:
         raise ImportError("openai package is not installed. Run: pip install openai")
 
 
+def _get_api_key() -> str:
+    """Return the configured API key. GitHub PAT takes priority, then OpenRouter, then OpenAI."""
+    return (
+        os.environ.get("GITHUB_TOKEN", "")
+        or os.environ.get("OPENROUTER_API_KEY", "")
+        or os.environ.get("OPENAI_API_KEY", "")
+    )
+
+
+def _is_github_token(api_key: str) -> bool:
+    """Return True when the key looks like a GitHub PAT or GITHUB_TOKEN env var is set."""
+    if os.environ.get("GITHUB_TOKEN", "") and api_key == os.environ.get("GITHUB_TOKEN", ""):
+        return True
+    return bool(api_key) and (
+        api_key.startswith("ghp_")
+        or api_key.startswith("github_pat_")
+        or api_key.startswith("gho_")
+        or api_key.startswith("ghs_")
+    )
+
+
+def _is_openrouter_key(api_key: str) -> bool:
+    """Return True when the key belongs to OpenRouter."""
+    return bool(api_key) and (
+        api_key.startswith("sk-or-") or bool(os.environ.get("OPENROUTER_API_KEY", ""))
+    )
+
+
 def _get_model_name() -> str:
     """
     Return the model name to use.
-    Checks MODEL_NAME env var first, then auto-selects based on key type.
+    Checks MODEL_NAME env var first, then auto-selects based on key/base URL.
     """
     explicit = os.environ.get("MODEL_NAME", "")
+    api_key = _get_api_key()
+    base_url = os.environ.get("OPENAI_BASE_URL", "")
+
+    using_github = _is_github_token(api_key) or (
+        base_url and "inference.ai.azure.com" in base_url.lower()
+    )
+    using_openrouter = (
+        bool(base_url and "openrouter.ai" in base_url.lower())
+        or _is_openrouter_key(api_key)
+    ) and not using_github
+
     if explicit:
-        return explicit
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if api_key.startswith("sk-or-"):
-        return "deepseek/deepseek-r1"
+        # Warn if an OpenRouter-specific slug is used with a non-OpenRouter backend
+        looks_openrouter_specific = "/" in explicit or explicit.endswith(":free")
+        if not using_openrouter and looks_openrouter_specific:
+            print(
+                "[WARN _get_model_name] Ignoring MODEL_NAME=%r because it looks "
+                "like an OpenRouter slug while not using OpenRouter." % explicit,
+                flush=True,
+            )
+        else:
+            return explicit
+
+    if using_github:
+        return "gpt-4o-mini"   # default free model available on GitHub Models
+    if using_openrouter:
+        return "openrouter/free"
     return "gpt-4o-mini"
 
 
@@ -73,6 +133,28 @@ def _call_llm(system_prompt: str, user_prompt: str, model: str = "") -> str:
     client = _get_openai_client()
     if not model:
         model = _get_model_name()
+    api_key = _get_api_key()
+    base_url = os.environ.get("OPENAI_BASE_URL", "")
+    if _is_github_token(api_key) or (base_url and "inference.ai.azure.com" in base_url.lower()):
+        provider = "github_models"
+    elif (base_url and "openrouter.ai" in base_url.lower()) or _is_openrouter_key(api_key):
+        provider = "openrouter"
+    else:
+        provider = "openai"
+    print(
+        f"[DBUG _call_llm] provider={provider} model={model} | "
+        f"prompt_len={len(system_prompt)+len(user_prompt)}",
+        flush=True,
+    )
+    # max_tokens: 128 was set for free-tier OpenRouter; GitHub Models supports much higher limits.
+    # 1024 is sufficient for parse_resume JSON (~200 tokens) and score_candidate JSON (~400 tokens).
+    api_key = _get_api_key()
+    base_url = os.environ.get("OPENAI_BASE_URL", "")
+    using_github = _is_github_token(api_key) or (
+        base_url and "inference.ai.azure.com" in base_url.lower()
+    )
+    max_tok = 1024 if using_github else 128
+
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -80,9 +162,21 @@ def _call_llm(system_prompt: str, user_prompt: str, model: str = "") -> str:
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.0,
-        max_tokens=1024,  # cap to avoid over-reserving credits on OpenRouter
+        max_tokens=max_tok,
     )
-    return response.choices[0].message.content.strip()
+    choice = response.choices[0] if response.choices else None
+    message = getattr(choice, "message", None)
+    content = getattr(message, "content", None)
+    if not isinstance(content, str) or not content.strip():
+        finish_reason = getattr(choice, "finish_reason", None)
+        tool_calls = bool(getattr(message, "tool_calls", None)) if message is not None else False
+        raise RuntimeError(
+            "LLM returned empty content "
+            f"(provider={provider}, model={model}, finish_reason={finish_reason}, tool_calls={tool_calls})."
+        )
+    out = content.strip()
+    print(f"[DBUG _call_llm] OK | resp_len={len(out)}", flush=True)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +453,7 @@ def score_candidate(
                 )
 
     except Exception as exc:
-        # Fallback: zero-score all criteria with error flag
+        print(f"[WARN score_candidate] LLM scoring failed for {profile.name}: {exc}", flush=True)
         criteria_scores = [
             CriterionScore(
                 criterion=c.name,

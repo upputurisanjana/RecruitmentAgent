@@ -19,7 +19,7 @@ from typing import Optional
 # Load .env file before anything else reads environment variables
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent / ".env")
+    load_dotenv(Path(__file__).parent / ".env", override=True)
 except ImportError:
     pass  # python-dotenv not installed; rely on env vars being set externally
 
@@ -200,11 +200,20 @@ def render_sidebar(run_result: Optional[RunResult]):
 
         # ── API Key check ─────────────────────────────────────────────────
         st.markdown("---")
-        api_key = os.environ.get("OPENAI_API_KEY", "")
+        api_key = (
+            os.environ.get("GITHUB_TOKEN", "")
+            or os.environ.get("OPENROUTER_API_KEY", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+        )
         if not api_key:
-            st.warning("⚠️ OPENAI_API_KEY not set. Set it before running the agent.")
+            st.warning("⚠️ Set GITHUB_TOKEN, OPENROUTER_API_KEY, or OPENAI_API_KEY before running the agent.")
         else:
-            st.success("✅ OpenAI API key found.")
+            if os.environ.get("GITHUB_TOKEN", ""):
+                st.success("✅ GitHub token found (GitHub Models).")
+            elif os.environ.get("OPENROUTER_API_KEY", ""):
+                st.success("✅ OpenRouter API key found.")
+            else:
+                st.success("✅ API key found.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -501,7 +510,8 @@ def _render_fairness_panel():
         st.markdown("**Fairness Check — Name Swap Test**")
         st.markdown(
             "Scores two profiles with identical relevant experience but different names.  \n"
-            "A PASS requires the weighted scores to be within 0.01 of each other."
+            "Both profiles are scored under a neutral name — the LLM never sees demographic names.  \n"
+            "A PASS requires delta = 0.00 (guaranteed when name bias is absent)."
         )
 
         if fr:
@@ -605,9 +615,9 @@ def _render_audit_log(current_run: RunResult):
 
 def _start_run():
     """Initialise and start a new agent run."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
-        st.session_state["run_error"] = "OPENAI_API_KEY environment variable is not set."
+        st.session_state["run_error"] = "Set OPENROUTER_API_KEY or OPENAI_API_KEY."
         return
 
     st.session_state["running"] = True

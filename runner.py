@@ -13,8 +13,14 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env", override=True)
+except ImportError:
+    pass
+from datetime import datetime, timezone
 from typing import Optional
 
 from schemas import (

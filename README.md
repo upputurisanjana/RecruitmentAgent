@@ -20,8 +20,8 @@ Given one job description and three candidate résumés, the agent:
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set your OpenAI API key
-export OPENAI_API_KEY=sk-...   # Windows: set OPENAI_API_KEY=sk-...
+# 2. Set your OpenRouter API key
+export OPENROUTER_API_KEY=sk-or-...   # Windows: set OPENROUTER_API_KEY=sk-or-...
 
 # 3. Run the Streamlit app
 streamlit run streamlit_app.py
@@ -57,6 +57,8 @@ RecruitmentAgent/
 | Prompt-injection defence | `guardrails.sanitize_resume_text()` strips hostile instructions before LLM sees them |
 | Fairness check | Name-swap test in Tab 2 → Fairness Check panel |
 | Decision audit log | Every run persisted to `audit_log/<run_id>.json` |
+
+OpenRouter is used via the OpenAI-compatible client. For free runs, the code defaults to the `openrouter/free` router, which automatically picks an available free model.
 
 ## Scoring Rubric
 
