@@ -1,0 +1,19 @@
+# TechVest Recruitment Agent — Python dependencies
+# Install with: pip install -r requirements.txt
+# Python 3.13 + Windows (all packages below have pre-built wheels)
+
+# ── Core framework ─────────────────────────────────────────────────────────
+streamlit>=1.35.0
+
+# ── LangGraph + LangChain (use versions already in your env) ──────────────
+langgraph==1.2.7
+langchain-core==1.4.8
+langgraph-checkpoint==4.1.1
+
+# ── OpenAI client ─────────────────────────────────────────────────────────
+openai>=1.35.7
+
+# ── Data / validation ─────────────────────────────────────────────────────
+pydantic>=2.7.4
+pandas>=2.2.3
+numpy>=2.1.0

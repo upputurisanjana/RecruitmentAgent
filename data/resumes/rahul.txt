@@ -1,0 +1,38 @@
+RAHUL VERMA
+rahul.verma@email.com | github.com/rahulv
+
+EDUCATION
+B.Sc. in Information Technology, Pune University, 2023
+Percentage: 72%
+Relevant coursework: Database Management, Web Technologies, Python Programming, Introduction to AI
+
+EXPERIENCE
+Software Development Intern — Softworks Pvt. Ltd. (May 2022 – Aug 2022, 3 months)
+- Developed REST APIs using Django for an e-commerce inventory management system.
+- Wrote SQL queries to generate sales reports for the operations team.
+- Participated in 2 sprint retrospectives; helped document API endpoints in Confluence.
+
+PROJECTS
+1. Movie Recommendation System (2023, university final-year project)
+   - Built a collaborative filtering recommender using the MovieLens 100K dataset in Python.
+   - Used pandas and scikit-learn's cosine similarity; RMSE of 0.94 on test split.
+   - Project was graded A- by supervisor; no public repository available.
+
+2. Spam Email Classifier (2022, coursework)
+   - Trained a Naive Bayes classifier on the Enron spam dataset using scikit-learn.
+   - Achieved 89% accuracy; completed as part of the Introduction to AI course assignment.
+   - No additional depth or independent iteration beyond the assignment requirements.
+
+3. Personal Portfolio Website (2021)
+   - HTML/CSS/JavaScript portfolio page; hosted on GitHub Pages.
+   - Not relevant to ML/AI work.
+
+SKILLS
+Languages: Python (intermediate), SQL (intermediate), HTML/CSS (basic)
+ML: scikit-learn (basic usage), pandas, NumPy
+Frameworks: Django (web), no LLM/GenAI framework experience
+Tools: Git, Confluence, Jira
+
+ADDITIONAL
+- Attended an online Coursera course on Machine Learning (Andrew Ng) — not yet completed (50% progress as of submission).
+- Interested in transitioning into AI/ML full-time.

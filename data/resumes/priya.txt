@@ -1,0 +1,40 @@
+PRIYA SHARMA
+priya.sharma@email.com | github.com/priyasharma | linkedin.com/in/priya-sharma-ml
+
+EDUCATION
+B.Tech in Computer Science, IIT Hyderabad, 2023
+CGPA: 8.9 / 10
+Relevant coursework: Machine Learning, Deep Learning, Natural Language Processing, Data Structures & Algorithms
+
+EXPERIENCE
+AI/ML Intern — FinEdge Analytics (June 2022 – Dec 2022, 6 months)
+- Built a binary classification model to predict loan default risk using scikit-learn (Random Forest + XGBoost); achieved AUC-ROC of 0.91 on hold-out test set.
+- Integrated OpenAI GPT-3.5 API into an internal document summarisation pipeline, reducing analyst review time by 40%.
+- Wrote end-to-end experiment tracking using MLflow, versioning 12 model runs with full parameter and metric logging.
+- Presented results to the product team (8 non-technical stakeholders) in a 20-minute demo; received commendation from the Head of Analytics.
+
+PROJECTS
+1. LangChain Document Q&A System (2023, personal project — github.com/priyasharma/docqa)
+   - Built a Retrieval-Augmented Generation (RAG) pipeline using LangChain + ChromaDB + OpenAI embeddings to answer questions over a 200-page financial regulation PDF.
+   - Implemented chunking strategies (recursive text splitter, 512 tokens / 64 overlap) and evaluated retrieval quality using RAGAS; achieved faithfulness score of 0.87.
+   - Documented architecture, setup steps, and evaluation results in a GitHub README; project starred by 140+ users.
+
+2. Image Classification on CIFAR-10 (2022, university project)
+   - Trained a ResNet-18 from scratch in PyTorch; achieved 93.2% test accuracy after implementing learning-rate scheduling and data augmentation.
+   - Led a 3-person team; owned the training loop, hyperparameter tuning, and final write-up.
+   - Submitted as a class competition entry; ranked 2nd out of 34 teams.
+
+3. Sentiment Analysis API (2023)
+   - Fine-tuned DistilBERT on the SST-2 dataset using HuggingFace Transformers; deployed as a FastAPI service on AWS EC2.
+   - Added unit tests (pytest) and a CI pipeline (GitHub Actions); maintained 98% uptime over 3-month hobby use period.
+
+SKILLS
+Languages: Python (advanced), SQL (intermediate), JavaScript (basic)
+ML/DL: scikit-learn, PyTorch, HuggingFace Transformers, XGBoost
+LLM/GenAI: LangChain, OpenAI API, ChromaDB, FAISS, RAGAS
+MLOps: MLflow, GitHub Actions, Docker (basic), AWS EC2
+Communication: Technical writing, slide deck presentations, team leadership (led 2 project teams)
+
+CERTIFICATIONS
+- DeepLearning.AI — Deep Learning Specialization (Coursera, 2022)
+- AWS Cloud Practitioner (2023)
