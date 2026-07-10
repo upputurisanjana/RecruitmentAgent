@@ -615,9 +615,13 @@ def _render_audit_log(current_run: RunResult):
 
 def _start_run():
     """Initialise and start a new agent run."""
-    api_key = os.environ.get("OPENROUTER_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
+    api_key = (
+        os.environ.get("GITHUB_TOKEN", "")
+        or os.environ.get("OPENROUTER_API_KEY", "")
+        or os.environ.get("OPENAI_API_KEY", "")
+    )
     if not api_key:
-        st.session_state["run_error"] = "Set OPENROUTER_API_KEY or OPENAI_API_KEY."
+        st.session_state["run_error"] = "Set GITHUB_TOKEN, OPENROUTER_API_KEY, or OPENAI_API_KEY."
         return
 
     st.session_state["running"] = True
