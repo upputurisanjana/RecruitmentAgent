@@ -1,0 +1,37 @@
+DEVRAJ PATEL
+devraj.patel@email.com | github.com/devrajp
+
+EDUCATION
+B.E. in Electronics and Communication, Visvesvaraya Technological University, 2023
+CGPA: 6.8 / 10
+Relevant coursework: Signal Processing, Embedded Systems, Basic Python, Engineering Mathematics
+
+EXPERIENCE
+Junior Software Engineer — WebCraft Solutions (Sep 2022 – Mar 2023, 6 months)
+- Maintained a PHP-based CMS for 3 small business clients.
+- Wrote SQL queries to populate monthly analytics dashboards.
+- Attended 2-day internal Python training workshop; no subsequent Python work at this role.
+
+PROJECTS
+1. Plant Disease Detection App (2023, final-year project)
+   - Used a pre-trained MobileNetV2 model (transfer learning) from TensorFlow Hub to classify 5 plant diseases.
+   - No fine-tuning performed; used the model as a feature extractor with a linear SVM on top (scikit-learn).
+   - Achieved 78% accuracy on a 500-image test set; project submitted and graded B.
+   - No public repository.
+
+2. Student Marks Analysis (2022, coursework)
+   - Computed basic descriptive statistics (mean, median, standard deviation) on a CSV file using Python and pandas.
+   - Single script, 40 lines. No ML component.
+
+3. Arduino LED Controller (2021)
+   - Programmed an Arduino UNO to blink LEDs in a pattern; unrelated to ML/AI.
+
+SKILLS
+Languages: Python (basic), PHP (intermediate), SQL (intermediate)
+ML: TensorFlow (beginner — used one pre-trained model), scikit-learn (very basic), pandas
+Frameworks: None relevant to ML/LLM engineering
+Tools: Git, XAMPP, Arduino IDE
+
+ADDITIONAL
+- Completed 30% of Andrew Ng's Machine Learning Coursera course.
+- Aspires to transition into AI/ML; no significant independent ML project experience yet.

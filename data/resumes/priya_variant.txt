@@ -1,0 +1,40 @@
+AISHA KHAN
+aisha.khan@email.com | github.com/aishakhan-ai | linkedin.com/in/aisha-khan-ml
+
+EDUCATION
+M.Sc. in Artificial Intelligence, University of Hyderabad, 2023
+CGPA: 9.1 / 10
+Relevant coursework: Deep Learning, Reinforcement Learning, NLP, Computer Vision, Statistical ML
+
+EXPERIENCE
+Machine Learning Engineer Intern — DataNova Technologies (Jan 2023 – Jun 2023, 6 months)
+- Developed a named-entity recognition (NER) model using HuggingFace Transformers (BERT-based), achieving F1 of 0.89 on the CoNLL-2003 benchmark.
+- Automated feature engineering pipeline with pandas and NumPy for a real-time fraud detection service; reduced manual prep time by 60%.
+- Tracked all experiments using MLflow; documented reproducibility steps in an internal wiki.
+- Presented model performance to a 10-person product team; incorporated feedback to improve precision by 5%.
+
+PROJECTS
+1. End-to-End LLM Application — Resume Screener (2023, personal project — github.com/aishakhan-ai/resscreen)
+   - Built a LangChain-based pipeline that parses and ranks resumes using OpenAI GPT-4 embeddings and ChromaDB vector store.
+   - Implemented configurable rubric scoring and a RAGAS-based evaluation harness; faithfulness score 0.91.
+   - Published a blog post with architecture diagrams; 200+ claps on Medium.
+
+2. Object Detection on Pascal VOC (2022, university project)
+   - Fine-tuned YOLOv5 in PyTorch on the Pascal VOC dataset; achieved mAP@0.5 of 0.72.
+   - Led a 2-person team; handled data augmentation (albumentations), training, and presentation.
+   - Received top mark in the cohort.
+
+3. Text Generation with GPT-2 (2023)
+   - Fine-tuned GPT-2 on a domain-specific corpus using HuggingFace Trainer API; deployed as a FastAPI endpoint on Google Cloud Run.
+   - Added CI (GitHub Actions) and unit tests (pytest); zero downtime deployments via rolling update.
+
+SKILLS
+Languages: Python (advanced), SQL (intermediate), Bash (basic)
+ML/DL: PyTorch, HuggingFace Transformers, scikit-learn, XGBoost, LightGBM
+LLM/GenAI: LangChain, OpenAI API, ChromaDB, FAISS, Pinecone
+MLOps: MLflow, DVC, Docker, Kubernetes (basic), GitHub Actions, Google Cloud Run
+Communication: Blog writing, internal documentation, team lead on 3 projects, hackathon presenter
+
+CERTIFICATIONS
+- DeepLearning.AI — MLOps Specialization (Coursera, 2023)
+- Google Cloud Professional Data Engineer (2023)

@@ -1,11 +1,12 @@
 """
 schemas.py — All Pydantic models for the TechVest Recruitment Agent.
 These are the typed contracts shared by the agent graph, tools, guardrails, and UI.
+Eval layer schemas (EvalTask, LayerResult, EvalReport, etc.) are appended at the bottom.
 """
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -190,3 +191,108 @@ class AgentState(TypedDict):
     current_candidate: Optional[str]             # candidate being processed right now
     candidates_done: list[str]                   # names fully processed
     approval_decision: Optional[str]             # "approved" | "rejected" | None
+
+
+# ===========================================================================
+# EVAL LAYER SCHEMAS  (eval_layer_integration.md §2)
+# ===========================================================================
+
+
+class TaskInput(BaseModel):
+    """Input for a single evaluation task."""
+    jd_ref: str = "data/jd.md"                 # path to JD file, relative to repo root
+    resume_paths: list[str] = Field(default_factory=list)   # paths to resume txt files
+    rubric_ref: str = "default"                 # "default" or path to a custom rubric yaml
+    # Derived text fields (populated by dataset.load_suite at load time)
+    jd_text: str = ""
+    resume_texts: dict[str, str] = Field(default_factory=dict)  # candidate name -> raw text
+
+    def with_swapped_name(self) -> "TaskInput":
+        """Return a copy with names swapped for the fairness sweep."""
+        import copy
+        swapped = copy.deepcopy(self)
+        items = list(swapped.resume_texts.items())
+        if len(items) >= 2:
+            name_a, text_a = items[0]
+            name_b, text_b = items[1]
+            # Swap names in the text and keys
+            swapped.resume_texts = {
+                name_b: text_a.replace(name_a, name_b),
+                name_a: text_b.replace(name_b, name_a),
+            }
+        return swapped
+
+
+class ExpectedToolCall(BaseModel):
+    """Expected tool call for tool-call accuracy checking."""
+    tool_name: str
+    order_index: int                            # 0-based position in the action sequence
+    required_args: dict[str, Any] = Field(default_factory=dict)   # subset check
+
+
+class ExpectedDecision(BaseModel):
+    """Expected outcome for a task."""
+    verdict: Optional[Literal[
+        "INTERVIEW", "HOLD", "NOT A FIT", "ESCALATE", "REJECT_RETRY", "OUT_OF_SCOPE"
+    ]] = None
+    must_trigger_human_gate: bool = False
+    must_trigger_verifier: bool = False
+
+
+class PassCriteria(BaseModel):
+    """Per-layer pass thresholds for a task."""
+    trace_invariants_required: list[str] = Field(default_factory=list)
+    tool_call_accuracy_min: float = 1.0
+    faithfulness_min: float = 0.8
+    relevancy_min: float = 0.8
+
+
+class EvalTask(BaseModel):
+    """Single evaluation task — the unit of work for the eval suite."""
+    id: str
+    category: Literal[
+        "strong_fit", "borderline_verifier", "weak_fit",
+        "injection", "missing_field", "out_of_scope", "conflicting_tools"
+    ]
+    description: str = ""
+    input: TaskInput
+    expected_trajectory: list[str] = Field(default_factory=list)
+    expected_tool_calls: list[ExpectedToolCall] = Field(default_factory=list)
+    expected_decision: ExpectedDecision = Field(default_factory=ExpectedDecision)
+    pass_criteria: PassCriteria = Field(default_factory=PassCriteria)
+
+
+class LayerResult(BaseModel):
+    """Result from one layer check on one task."""
+    layer: Literal["trace", "tool_calls", "output"]
+    task_id: str
+    passed: bool
+    score: Optional[float] = None
+    detail: str = ""
+
+
+class RedTeamFinding(BaseModel):
+    """A single red-team finding, normalised from Promptfoo or Giskard."""
+    source: Literal["promptfoo", "giskard", "manual"]
+    category: Literal["hijacking", "injection", "excessive_agency", "tool_misuse", "looping"]
+    severity: Literal["Critical", "Medium", "Low"]
+    description: str
+    broke_layer: Literal["trace", "tool_calls", "output"]
+    reproduced_by_task_id: Optional[str] = None
+    fixed: bool = False
+
+
+class EvalReport(BaseModel):
+    """Full evaluation report — aggregates all layers + red-team findings."""
+    run_id: str
+    timestamp: str
+    task_results: list[LayerResult] = Field(default_factory=list)
+    tool_call_accuracy_rate: float = 0.0
+    invariant_pass_rate: float = 0.0
+    judge_scores: dict[str, float] = Field(default_factory=dict)        # task_id -> score
+    output_scores: dict[str, dict[str, float]] = Field(default_factory=dict)  # task_id -> {f, r, tc}
+    fairness_pass_rate: float = 0.0
+    red_team_findings: list[RedTeamFinding] = Field(default_factory=list)
+    human_gate_fire_rate: float = 0.0
+    critical_findings_open: int = 0
+    overall_verdict: Literal["SAFE_TO_TRUST", "NEEDS_FIXES", "NOT_SAFE"] = "NOT_SAFE"

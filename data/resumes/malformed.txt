@@ -1,0 +1,10 @@
+~~~CORRUPTED FILE~~~
+€€€ ÿÿÿ NULL BYTE SEQUENCE
+...........................................................
+[SECTION HEADER MISSING]
+
+some relevant keywords maybe python machine learning
+
+--- DATA TRUNCATED AT 42 BYTES ---
+
+skills:

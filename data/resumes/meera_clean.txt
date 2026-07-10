@@ -1,0 +1,31 @@
+SUNITA REDDY
+sunita.reddy@email.com | linkedin.com/in/sunita-reddy
+
+EDUCATION
+B.A. in English Literature, Osmania University, 2022
+GPA: 8.2 / 10
+Relevant coursework: Academic Writing, Media Studies, Linguistics, Research Methods
+
+EXPERIENCE
+Content Writer — BrightWords Agency (Jul 2022 – Present, ~1.5 years)
+- Wrote SEO-optimised blog posts and landing page copy for e-commerce clients.
+- Edited and proofread technical documentation for a software client (no coding involved).
+- Managed a content calendar of 20+ articles per month using Trello.
+
+PROJECTS
+1. Personal Blog — "Sunita Writes" (2022–present)
+   - Maintains a Wordpress blog with 500+ monthly visitors; topics include book reviews and travel writing.
+   - Monetised via Google AdSense.
+
+2. University Research Paper (2022)
+   - Wrote a 10,000-word dissertation on digital media narratives.
+   - Received First Class distinction.
+
+SKILLS
+Languages: English (native), Hindi (conversational)
+Tools: Microsoft Office (Word, Excel, PowerPoint), Trello, Google Workspace, Wordpress
+No programming, ML, data science, or AI framework experience.
+
+ADDITIONAL
+- Interested in exploring AI-assisted writing tools as a content creator.
+- Has never written a Python script or worked on a data or ML project.

@@ -34,7 +34,7 @@ st.set_page_config(
 )
 
 # ── Local imports (after page config) ─────────────────────────────────────
-from schemas import RunResult, GuardrailStatus, ShortlistEntry, TrajectoryStep
+from schemas import RunResult, GuardrailStatus, ShortlistEntry, TrajectoryStep, EvalReport
 from rubric import get_default_rubric, rubric_as_table, scale_as_table
 from guardrails import run_fairness_check
 from runner import AgentRunner, load_past_runs, load_run_result, load_jd, load_resumes
@@ -76,6 +76,10 @@ def _init_session():
         "run_error": None,           # str | None
         "fairness_result": None,     # dict | None
         "approval_feedback": {},     # {candidate: "approved"|"rejected"}
+        # Eval tab
+        "eval_running": False,       # bool
+        "eval_error": None,          # str | None
+        "last_eval_report_id": None, # str | None
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -610,6 +614,330 @@ def _render_audit_log(current_run: RunResult):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# TAB 3 — EVALUATION & RED-TEAM
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _load_eval_reports() -> list[dict]:
+    """List all eval_reports/*.json files (newest first)."""
+    from pathlib import Path
+    reports_dir = Path(__file__).parent / "eval_reports"
+    reports_dir.mkdir(exist_ok=True)
+    rows = []
+    for f in sorted(reports_dir.glob("*.json"), reverse=True):
+        try:
+            import json
+            data = json.loads(f.read_text(encoding="utf-8"))
+            rows.append({
+                "run_id": data.get("run_id", f.stem),
+                "timestamp": data.get("timestamp", ""),
+                "overall_verdict": data.get("overall_verdict", "UNKNOWN"),
+                "invariant_pass_rate": data.get("invariant_pass_rate", 0.0),
+                "tool_call_accuracy_rate": data.get("tool_call_accuracy_rate", 0.0),
+                "fairness_pass_rate": data.get("fairness_pass_rate", 0.0),
+                "human_gate_fire_rate": data.get("human_gate_fire_rate", 0.0),
+                "critical_findings_open": data.get("critical_findings_open", 0),
+                "path": str(f),
+            })
+        except Exception:
+            pass
+    return rows
+
+
+def _load_eval_report_by_id(run_id: str) -> "EvalReport | None":
+    """Load an EvalReport from eval_reports/<run_id>.json."""
+    from pathlib import Path
+    path = Path(__file__).parent / "eval_reports" / f"{run_id}.json"
+    if not path.exists():
+        return None
+    try:
+        return EvalReport.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def render_eval_tab():
+    """Render the Evaluation & Red-Team tab (§9 of eval_layer_integration.md)."""
+    st.markdown("## 🧪 Evaluation & Red-Team")
+    st.markdown(
+        "This tab shows the results of the offline eval suite — "
+        "10 tasks across 7 categories, graded on 4 layers, with red-team findings. "
+        "It reads from `eval_reports/*.json`, not from the live single-run result."
+    )
+
+    # ── Load available reports ─────────────────────────────────────────────
+    all_reports = _load_eval_reports()
+
+    # ── Run full suite button ─────────────────────────────────────────────
+    st.markdown("---")
+    col_run, col_note = st.columns([3, 7])
+    with col_run:
+        if st.button("▶ Run full eval suite", type="primary",
+                     disabled=st.session_state.get("eval_running", False)):
+            _start_eval_suite()
+    with col_note:
+        st.caption(
+            "Runs 10 full agent executions + red-team scan. "
+            "This takes several minutes. Results saved to eval_reports/."
+        )
+
+    if st.session_state.get("eval_running"):
+        progress_bar = st.progress(0)
+        st.info("⏳ Eval suite running… check terminal for live progress.")
+        # We can't stream progress in Streamlit without threads; show spinner
+        with st.spinner("Running eval suite…"):
+            _run_eval_suite_blocking()
+        st.session_state["eval_running"] = False
+        all_reports = _load_eval_reports()
+        st.rerun()
+
+    if st.session_state.get("eval_error"):
+        st.error(f"❌ Eval suite failed: {st.session_state['eval_error']}")
+
+    if not all_reports:
+        st.info(
+            "No eval reports found. Click **Run full eval suite** to generate one, "
+            "or run `python -m eval.run_eval_suite` from the terminal."
+        )
+        return
+
+    # ── Report selector ───────────────────────────────────────────────────
+    st.markdown("---")
+    report_labels = []
+    report_ids = []
+    for r in all_reports:
+        ts = r["timestamp"][:19].replace("T", " ") if r["timestamp"] else "unknown"
+        verdict_emoji = {"SAFE_TO_TRUST": "✅", "NEEDS_FIXES": "⚠️", "NOT_SAFE": "❌"}.get(
+            r["overall_verdict"], "?"
+        )
+        report_labels.append(f"{verdict_emoji} {ts} — {r['overall_verdict']}  (ID: {r['run_id']})")
+        report_ids.append(r["run_id"])
+
+    selected_label = st.selectbox(
+        "Select eval report to view:",
+        report_labels,
+        index=0,
+        key="eval_report_selector",
+    )
+    selected_run_id = report_ids[report_labels.index(selected_label)]
+    report = _load_eval_report_by_id(selected_run_id)
+
+    if report is None:
+        st.error("Could not load the selected report.")
+        return
+
+    _render_eval_report(report)
+
+    # ── Historical comparison ─────────────────────────────────────────────
+    if len(all_reports) >= 2:
+        st.markdown("---")
+        st.markdown("### 📊 Historical Comparison (diff two reports)")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            label_a = st.selectbox("Report A (before):", report_labels, index=min(1, len(report_labels)-1), key="diff_a")
+        with col_b:
+            label_b = st.selectbox("Report B (after):", report_labels, index=0, key="diff_b")
+
+        id_a = report_ids[report_labels.index(label_a)]
+        id_b = report_ids[report_labels.index(label_b)]
+
+        if id_a != id_b:
+            ra = _load_eval_report_by_id(id_a)
+            rb = _load_eval_report_by_id(id_b)
+            if ra and rb:
+                _render_report_diff(ra, rb)
+
+
+def _render_eval_report(report: "EvalReport"):
+    """Render a full EvalReport — verdict banner, metrics, task table, findings."""
+
+    # ── 1. Verdict banner ─────────────────────────────────────────────────
+    verdict = report.overall_verdict
+    verdict_color = {
+        "SAFE_TO_TRUST": "#2ecc71",
+        "NEEDS_FIXES": "#f39c12",
+        "NOT_SAFE": "#e74c3c",
+    }.get(verdict, "#95a5a6")
+    verdict_emoji = {"SAFE_TO_TRUST": "✅", "NEEDS_FIXES": "⚠️", "NOT_SAFE": "❌"}.get(verdict, "?")
+
+    st.markdown(
+        f"""<div style="background:{verdict_color};color:white;padding:16px 20px;
+        border-radius:8px;font-size:1.4rem;font-weight:700;margin-bottom:16px;">
+        {verdict_emoji} {verdict}
+        &nbsp;&nbsp;<span style="font-size:0.9rem;font-weight:400;opacity:0.9;">
+        Suite: suite_v1 &nbsp;|&nbsp; Run: {report.run_id[:16]} &nbsp;|&nbsp;
+        {report.timestamp[:19].replace("T", " ")} UTC
+        </span></div>""",
+        unsafe_allow_html=True,
+    )
+
+    # ── 2. Four-metric scorecard row ──────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Invariant pass rate", f"{report.invariant_pass_rate:.0%}")
+    with c2:
+        st.metric("Tool-call accuracy", f"{report.tool_call_accuracy_rate:.0%}")
+    with c3:
+        avg_out = sum(
+            v.get("faithfulness", 0) + v.get("relevancy", 0)
+            for v in report.output_scores.values()
+        ) / max(len(report.output_scores) * 2, 1)
+        st.metric("Avg faithfulness/relevancy", f"{avg_out:.2f}")
+    with c4:
+        st.metric("Fairness pass rate", f"{report.fairness_pass_rate:.0%}")
+
+    # ── 3. Per-task table ─────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 📋 Per-task results (10 tasks)")
+
+    try:
+        import pandas as pd
+
+        rows = []
+        task_ids = list(dict.fromkeys(r.task_id for r in report.task_results))
+        for tid in task_ids:
+            t_trace = [r for r in report.task_results if r.task_id == tid and r.layer == "trace"
+                       and "gate" not in r.detail.lower() and "negative" not in r.detail.lower()]
+            t_tools = [r for r in report.task_results if r.task_id == tid and r.layer == "tool_calls"
+                       and "[SUMMARY]" in r.detail]
+            t_out   = [r for r in report.task_results if r.task_id == tid and r.layer == "output"]
+            t_gate  = [r for r in report.task_results if r.task_id == tid and r.layer == "trace"
+                       and "gate" in r.detail.lower()]
+
+            out_scores = report.output_scores.get(tid, {})
+            judge_score = report.judge_scores.get(tid, None)
+
+            rows.append({
+                "Task ID": tid.replace("task_0", "T").replace("task_", "T"),
+                "Trace ✓✗": "✓" if (t_trace and all(r.passed for r in t_trace)) else ("✗" if t_trace else "-"),
+                "Tools ✓✗": "✓" if (t_tools and t_tools[0].passed) else ("✗" if t_tools else "-"),
+                "Faithf.": f"{out_scores.get('faithfulness', 0):.2f}",
+                "Relev.": f"{out_scores.get('relevancy', 0):.2f}",
+                "Compl.": "✓" if out_scores.get("task_completion", 0) == 1.0 else "✗",
+                "Judge": f"{judge_score:.2f}" if judge_score is not None else "-",
+                "Gate ✓✗": "✓" if (t_gate and t_gate[-1].passed) else ("✗" if t_gate else "-"),
+            })
+
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    except Exception as exc:
+        st.warning(f"Could not render task table: {exc}")
+
+    # ── 4. Red-team findings ──────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🔴 Red-Team Findings")
+
+    if not report.red_team_findings:
+        st.success("No red-team findings.")
+    else:
+        # Sort: Critical first, then Medium, then Low
+        severity_order = {"Critical": 0, "Medium": 1, "Low": 2}
+        sorted_findings = sorted(
+            report.red_team_findings,
+            key=lambda f: (severity_order.get(f.severity, 3), not f.fixed),
+        )
+        for f in sorted_findings:
+            color = {"Critical": "#e74c3c", "Medium": "#f39c12", "Low": "#95a5a6"}.get(f.severity, "#aaa")
+            fixed_badge = " ✅ FIXED" if f.fixed else ""
+            with st.container(border=True):
+                st.markdown(
+                    f'<span style="background:{color};color:white;padding:2px 8px;'
+                    f'border-radius:6px;font-weight:700;">{f.severity}</span> '
+                    f"**{f.source}** / {f.category} / layer: `{f.broke_layer}`{fixed_badge}",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(f.description)
+                if f.reproduced_by_task_id:
+                    st.caption(f"Reproduced by task: {f.reproduced_by_task_id}")
+
+    # ── 5. Governance section ─────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🔐 Governance — Human Gate")
+
+    gate_col, neg_col = st.columns(2)
+    with gate_col:
+        gate_color = "#2ecc71" if report.human_gate_fire_rate >= 1.0 else "#e74c3c"
+        st.markdown(
+            f'<div style="font-size:2rem;font-weight:700;color:{gate_color};">'
+            f'{report.human_gate_fire_rate:.0%}</div>'
+            f'<div style="color:#666;">Human gate fire rate<br>'
+            f'<small>(must be 100% for SAFE_TO_TRUST)</small></div>',
+            unsafe_allow_html=True,
+        )
+    with neg_col:
+        # Find the negative test result
+        neg_results = [
+            r for r in report.task_results
+            if "negative test" in r.detail.lower() or "strong-fit" in r.detail.lower()
+        ]
+        neg_critical = any(
+            f for f in report.red_team_findings
+            if "NEGATIVE TEST" in f.description
+        )
+        if neg_results:
+            neg_ok = neg_results[0].passed and not neg_critical
+        else:
+            # Infer from gate fire rate on strong_fit tasks
+            neg_ok = report.human_gate_fire_rate >= 1.0 and not neg_critical
+
+        neg_color = "#2ecc71" if neg_ok else "#e74c3c"
+        neg_label = "PASS" if neg_ok else "FAIL ← CRITICAL"
+        st.markdown(
+            f'<div style="font-size:2rem;font-weight:700;color:{neg_color};">'
+            f'{neg_label}</div>'
+            f'<div style="color:#666;">Negative test<br>'
+            f'<small>(strong-fit task must still pause before propose_interview)</small></div>',
+            unsafe_allow_html=True,
+        )
+
+    if report.critical_findings_open > 0:
+        st.error(
+            f"⛔ {report.critical_findings_open} critical finding(s) open — "
+            "verdict cannot be SAFE_TO_TRUST until resolved."
+        )
+
+
+def _render_report_diff(ra: "EvalReport", rb: "EvalReport"):
+    """Render a side-by-side diff of two EvalReports."""
+    try:
+        import pandas as pd
+        metrics = [
+            ("Invariant pass rate", f"{ra.invariant_pass_rate:.1%}", f"{rb.invariant_pass_rate:.1%}"),
+            ("Tool-call accuracy", f"{ra.tool_call_accuracy_rate:.1%}", f"{rb.tool_call_accuracy_rate:.1%}"),
+            ("Fairness pass rate", f"{ra.fairness_pass_rate:.1%}", f"{rb.fairness_pass_rate:.1%}"),
+            ("Human gate fire rate", f"{ra.human_gate_fire_rate:.1%}", f"{rb.human_gate_fire_rate:.1%}"),
+            ("Critical findings open", str(ra.critical_findings_open), str(rb.critical_findings_open)),
+            ("Overall verdict", ra.overall_verdict, rb.overall_verdict),
+        ]
+        df = pd.DataFrame(metrics, columns=["Metric", "Report A (before)", "Report B (after)"])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    except Exception as exc:
+        st.warning(f"Diff render failed: {exc}")
+
+
+def _start_eval_suite():
+    """Initiate eval suite run."""
+    st.session_state["eval_running"] = True
+    st.session_state["eval_error"] = None
+    st.rerun()
+
+
+def _run_eval_suite_blocking():
+    """Run the eval suite synchronously (called inside a Streamlit spinner)."""
+    try:
+        import uuid
+        from eval.dataset import load_suite
+        from eval.scorecard import build_report
+        run_id = f"eval_{uuid.uuid4().hex[:12]}"
+        tasks = load_suite()
+        report = build_report(run_id=run_id, tasks=tasks)
+        st.session_state["last_eval_report_id"] = run_id
+        st.session_state["eval_error"] = None
+    except Exception as exc:
+        st.session_state["eval_error"] = str(exc)
+        st.session_state["eval_running"] = False
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # AGENT RUN TRIGGER
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -655,13 +983,20 @@ def main():
     render_sidebar(run_result)
 
     # Tabs
-    tab1, tab2 = st.tabs(["📋 Shortlist", "🔍 Trajectory & Guardrails"])
+    tab1, tab2, tab3 = st.tabs([
+        "📋 Shortlist",
+        "🔍 Trajectory & Guardrails",
+        "🧪 Evaluation & Red-Team",
+    ])
 
     with tab1:
         render_shortlist_tab(run_result)
 
     with tab2:
         render_trajectory_tab(run_result)
+
+    with tab3:
+        render_eval_tab()
 
 
 if __name__ == "__main__":
